@@ -22,3 +22,5 @@ mvn clean test      # збірка і unit-тести всіх сервісів
 mvn package         # JAR-файли в services/*/target/
 java -jar services/order-service/target/order-service.jar   # GET http://localhost:8083/health
 ```
+
+CI trigger check
