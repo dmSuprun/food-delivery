@@ -16,11 +16,19 @@ pipeline {
         disableConcurrentBuilds()
     }
 
+    environment {
+        // ACR from the lab 1 plan; Docker and AKS steps are simulated
+        REGISTRY = 'acrfooddelivery.azurecr.io'
+    }
+
     stages {
         stage('Checkout') {
             steps {
                 checkout scm
-                sh 'git log -1 --oneline'
+                script {
+                    env.IMAGE_TAG = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
+                }
+                echo "Image tag: ${env.IMAGE_TAG}"
             }
         }
 
@@ -47,10 +55,77 @@ pipeline {
                 archiveArtifacts 'services/*/target/*.jar'
             }
         }
+
+        stage('Docker build') {
+            steps {
+                sh '''
+                    rm -f images.txt
+                    for dir in services/*/; do
+                        svc=$(basename "$dir")
+                        test -f "${dir}target/$svc.jar"
+                        echo "[SIMULATION] docker build -t $REGISTRY/$svc:$IMAGE_TAG $dir"
+                        echo "$REGISTRY/$svc:$IMAGE_TAG" >> images.txt
+                    done
+                '''
+                archiveArtifacts 'images.txt'
+            }
+        }
+
+        stage('Docker push') {
+            steps {
+                sh '''
+                    echo "[SIMULATION] az acr login --name ${REGISTRY%%.*}"
+                    while read -r image; do
+                        echo "[SIMULATION] docker push $image"
+                    done < images.txt
+                '''
+            }
+        }
+
+        stage('Deploy to staging') {
+            steps {
+                sh '''
+                    echo "[SIMULATION] az aks get-credentials --name aks-fooddelivery-staging"
+                    while read -r image; do
+                        svc=$(echo "$image" | cut -d/ -f2 | cut -d: -f1)
+                        echo "[SIMULATION] kubectl -n staging set image deployment/$svc $svc=$image"
+                    done < images.txt
+                    echo "[SIMULATION] kubectl -n staging rollout status deployment --timeout=120s"
+                    echo "Staging deployment finished: $IMAGE_TAG"
+                '''
+            }
+        }
+
+        stage('Approval') {
+            steps {
+                timeout(time: 30, unit: 'MINUTES') {
+                    script {
+                        env.APPROVER = input(message: "Deploy ${env.IMAGE_TAG} to production?",
+                                             ok: 'Deploy', submitterParameter: 'APPROVER')
+                    }
+                }
+                echo "Production deployment approved by: ${env.APPROVER}"
+            }
+        }
+
+        stage('Deploy to production') {
+            steps {
+                sh '''
+                    echo "[SIMULATION] az aks get-credentials --name aks-fooddelivery-production"
+                    while read -r image; do
+                        svc=$(echo "$image" | cut -d/ -f2 | cut -d: -f1)
+                        echo "[SIMULATION] kubectl -n production set image deployment/$svc $svc=$image"
+                    done < images.txt
+                    echo "[SIMULATION] kubectl -n production rollout status deployment --timeout=120s"
+                    echo "Production deployment finished: $IMAGE_TAG"
+                '''
+            }
+        }
     }
 
     post {
-        success { echo 'CI passed: all microservices built and unit-tested.' }
-        failure { echo 'CI failed: check the stage logs above.' }
+        success { echo 'CI/CD passed: built, tested, packaged and deployed to staging and production.' }
+        aborted { echo 'Pipeline aborted: production deployment was not approved.' }
+        failure { echo 'CI/CD failed: check the stage logs above.' }
     }
 }

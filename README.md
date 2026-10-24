@@ -13,7 +13,7 @@
 | `services/delivery-service` | Призначення найближчого кур'єра |
 | `services/notification-service` | Push/SMS/email-сповіщення про зміну статусу |
 | `docs/technical-spec.md` | Базове технічне завдання |
-| `Jenkinsfile` | CI/CD-конвеєр: збірка Maven, unit-тести JUnit, архівування JAR |
+| `Jenkinsfile` | CI/CD-конвеєр: Maven build, JUnit, JAR → Docker build/push (імітація) → staging → approval → production |
 
 ## Локальна збірка
 
