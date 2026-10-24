@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <title>Food Delivery – Services</title>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 720px; margin: 40px auto; padding: 0 16px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; padding: 10px; border-bottom: 1px solid #ddd; }
+    .up { color: #1a7f37; font-weight: bold; }
+    .down { color: #cf222e; font-weight: bold; }
+    button { padding: 8px 16px; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <h1>Food Delivery Platform</h1>
+  <p>Стан мікросервісів (запити йдуть через Nginx: <code>/api/&lt;service&gt;/health</code>)</p>
+  <table>
+    <thead><tr><th>Сервіс</th><th>Контейнер</th><th>Статус</th></tr></thead>
+    <tbody id="rows"></tbody>
+  </table>
+  <p><button onclick="refresh()">Оновити</button> <span id="checked"></span></p>
+  <script>
+    const services = [
+      ['auth', 'auth-service', 'Auth'],
+      ['restaurant', 'restaurant-service', 'Restaurants'],
+      ['order', 'order-service', 'Orders'],
+      ['payment', 'payment-service', 'Payments'],
+      ['delivery', 'delivery-service', 'Delivery'],
+      ['notification', 'notification-service', 'Notifications']
+    ];
+    async function check([path, container, title]) {
+      try {
+        const res = await fetch('/api/' + path + '/health');
+        const data = await res.json();
+        return `<tr><td>${title}</td><td>${container}</td><td class="up">${data.status}</td></tr>`;
+      } catch (err) {
+        return `<tr><td>${title}</td><td>${container}</td><td class="down">DOWN</td></tr>`;
+      }
+    }
+    async function refresh() {
+      const rows = await Promise.all(services.map(check));
+      document.getElementById('rows').innerHTML = rows.join('');
+      document.getElementById('checked').textContent = 'Перевірено: ' + new Date().toLocaleTimeString();
+    }
+    refresh();
+  </script>
+</body>
+</html>

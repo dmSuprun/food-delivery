@@ -17,8 +17,8 @@ pipeline {
     }
 
     environment {
-        // ACR from the lab 1 plan; Docker and AKS steps are simulated
-        REGISTRY = 'acrfooddelivery.azurecr.io'
+        // Local registry (registry:2) stands in for Azure Container Registry
+        REGISTRY = 'localhost:5000'
     }
 
     stages {
@@ -60,23 +60,50 @@ pipeline {
             steps {
                 sh '''
                     rm -f images.txt
-                    for dir in services/*/; do
-                        svc=$(basename "$dir")
-                        test -f "${dir}target/$svc.jar"
-                        echo "[SIMULATION] docker build -t $REGISTRY/$svc:$IMAGE_TAG $dir"
-                        echo "$REGISTRY/$svc:$IMAGE_TAG" >> images.txt
+                    for dir in services/*/ frontend/; do
+                        name=$(basename "$dir")
+                        docker build -t "$REGISTRY/$name:$IMAGE_TAG" -t "$REGISTRY/$name:latest" "$dir"
+                        echo "$REGISTRY/$name:$IMAGE_TAG" >> images.txt
                     done
+                    docker images --filter "reference=$REGISTRY/*:$IMAGE_TAG"
                 '''
                 archiveArtifacts 'images.txt'
+            }
+        }
+
+        stage('Container smoke test') {
+            steps {
+                sh '''
+                    for dir in services/*/; do
+                        name=$(basename "$dir")
+                        docker run -d --name "smoke-$name" "$REGISTRY/$name:$IMAGE_TAG" > /dev/null
+                    done
+                    for dir in services/*/; do
+                        name=$(basename "$dir")
+                        status=starting
+                        for i in $(seq 1 30); do
+                            status=$(docker inspect -f '{{.State.Health.Status}}' "smoke-$name")
+                            [ "$status" = "healthy" ] && break
+                            sleep 2
+                        done
+                        echo "$name: $status"
+                        [ "$status" = "healthy" ] || exit 1
+                    done
+                '''
+            }
+            post {
+                always {
+                    sh 'docker ps -aq --filter "name=smoke-" | xargs -r docker rm -f > /dev/null'
+                }
             }
         }
 
         stage('Docker push') {
             steps {
                 sh '''
-                    echo "[SIMULATION] az acr login --name ${REGISTRY%%.*}"
                     while read -r image; do
-                        echo "[SIMULATION] docker push $image"
+                        docker push "$image"
+                        docker push "${image%:*}:latest"
                     done < images.txt
                 '''
             }
@@ -90,7 +117,6 @@ pipeline {
                         svc=$(echo "$image" | cut -d/ -f2 | cut -d: -f1)
                         echo "[SIMULATION] kubectl -n staging set image deployment/$svc $svc=$image"
                     done < images.txt
-                    echo "[SIMULATION] kubectl -n staging rollout status deployment --timeout=120s"
                     echo "Staging deployment finished: $IMAGE_TAG"
                 '''
             }
@@ -116,7 +142,6 @@ pipeline {
                         svc=$(echo "$image" | cut -d/ -f2 | cut -d: -f1)
                         echo "[SIMULATION] kubectl -n production set image deployment/$svc $svc=$image"
                     done < images.txt
-                    echo "[SIMULATION] kubectl -n production rollout status deployment --timeout=120s"
                     echo "Production deployment finished: $IMAGE_TAG"
                 '''
             }
@@ -124,7 +149,7 @@ pipeline {
     }
 
     post {
-        success { echo 'CI/CD passed: built, tested, packaged and deployed to staging and production.' }
+        success { echo 'CI/CD passed: images built, smoke-tested, pushed to the registry and deployed.' }
         aborted { echo 'Pipeline aborted: production deployment was not approved.' }
         failure { echo 'CI/CD failed: check the stage logs above.' }
     }

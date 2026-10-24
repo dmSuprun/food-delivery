@@ -1,0 +1,53 @@
+# Stage 2 (containerization): all microservices + frontend.
+# Build JARs first: mvn clean package -DskipTests
+# Run:  docker compose up -d --build   ->  http://localhost:8090
+services:
+  auth-service:
+    build: ./services/auth-service
+    image: ${REGISTRY:-localhost:5000}/auth-service:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+
+  restaurant-service:
+    build: ./services/restaurant-service
+    image: ${REGISTRY:-localhost:5000}/restaurant-service:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+
+  order-service:
+    build: ./services/order-service
+    image: ${REGISTRY:-localhost:5000}/order-service:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+
+  payment-service:
+    build: ./services/payment-service
+    image: ${REGISTRY:-localhost:5000}/payment-service:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+
+  delivery-service:
+    build: ./services/delivery-service
+    image: ${REGISTRY:-localhost:5000}/delivery-service:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+
+  notification-service:
+    build: ./services/notification-service
+    image: ${REGISTRY:-localhost:5000}/notification-service:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    image: ${REGISTRY:-localhost:5000}/frontend:${IMAGE_TAG:-latest}
+    ports:
+      - "8090:80"
+    depends_on:
+      auth-service:
+        condition: service_healthy
+      restaurant-service:
+        condition: service_healthy
+      order-service:
+        condition: service_healthy
+      payment-service:
+        condition: service_healthy
+      delivery-service:
+        condition: service_healthy
+      notification-service:
+        condition: service_healthy
+    restart: unless-stopped
