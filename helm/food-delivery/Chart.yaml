@@ -1,0 +1,6 @@
+apiVersion: v2
+name: food-delivery
+description: Food delivery platform - 6 Java microservices + Nginx frontend
+type: application
+version: 0.1.0
+appVersion: "1.0.0"

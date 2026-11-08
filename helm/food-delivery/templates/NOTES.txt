@@ -1,0 +1,4 @@
+Food delivery platform deployed to namespace {{ .Release.Namespace }} (image tag {{ .Values.image.tag }}).
+
+  kubectl get pods,svc,hpa,ingress -n {{ .Release.Namespace }}
+  curl.exe -H "Host: {{ .Values.ingress.host }}" http://localhost:8880/api/order/health

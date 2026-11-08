@@ -1,0 +1,61 @@
+# Namespaces for the environments and a least-privilege account for Jenkins
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: staging
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: production
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: jenkins
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: jenkins-deployer
+  namespace: jenkins
+---
+# Long-lived token for the service account (used in Jenkins kubeconfig)
+apiVersion: v1
+kind: Secret
+metadata:
+  name: jenkins-deployer-token
+  namespace: jenkins
+  annotations:
+    kubernetes.io/service-account.name: jenkins-deployer
+type: kubernetes.io/service-account-token
+---
+# RoleBinding to the built-in ClusterRole "edit": full access to workloads,
+# but only inside this namespace and without rights to change RBAC itself
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: jenkins-deployer-edit
+  namespace: staging
+subjects:
+- kind: ServiceAccount
+  name: jenkins-deployer
+  namespace: jenkins
+roleRef:
+  kind: ClusterRole
+  name: edit
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: jenkins-deployer-edit
+  namespace: production
+subjects:
+- kind: ServiceAccount
+  name: jenkins-deployer
+  namespace: jenkins
+roleRef:
+  kind: ClusterRole
+  name: edit
+  apiGroup: rbac.authorization.k8s.io

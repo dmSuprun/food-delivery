@@ -1,0 +1,52 @@
+# Images are built and pushed by Jenkins (stage 2); the tag is the short git SHA
+image:
+  registry: localhost:5000
+  tag: latest
+  pullPolicy: IfNotPresent
+
+replicaCount: 1
+
+# Defaults for every Java microservice (HPA needs resources.requests.cpu)
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi
+
+autoscaling:
+  minReplicas: 1
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 50
+
+services:
+  auth-service:
+    port: 8081
+  restaurant-service:
+    port: 8082
+  order-service:
+    port: 8083
+    autoscaling: true
+  payment-service:
+    port: 8084
+  delivery-service:
+    port: 8085
+    autoscaling: true
+  notification-service:
+    port: 8086
+
+frontend:
+  port: 80
+  resources:
+    requests:
+      cpu: 20m
+      memory: 32Mi
+    limits:
+      cpu: 200m
+      memory: 64Mi
+
+ingress:
+  enabled: true
+  className: nginx
+  host: food.local

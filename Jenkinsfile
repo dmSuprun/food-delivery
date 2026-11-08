@@ -111,14 +111,17 @@ pipeline {
 
         stage('Deploy to staging') {
             steps {
-                sh '''
-                    echo "[SIMULATION] az aks get-credentials --name aks-fooddelivery-staging"
-                    while read -r image; do
-                        svc=$(echo "$image" | cut -d/ -f2 | cut -d: -f1)
-                        echo "[SIMULATION] kubectl -n staging set image deployment/$svc $svc=$image"
-                    done < images.txt
-                    echo "Staging deployment finished: $IMAGE_TAG"
-                '''
+                withCredentials([file(credentialsId: 'k8s-kubeconfig', variable: 'KUBECONFIG')]) {
+                    sh '''
+                        helm upgrade --install food-delivery helm/food-delivery                             --namespace staging                             -f helm/food-delivery/values-staging.yaml                             --set image.tag=$IMAGE_TAG                             --wait --timeout 5m
+                        kubectl -n staging get pods,svc,hpa,ingress
+                        # In-cluster smoke test: frontend pod calls every service by its Service DNS name
+                        for svc in auth:8081 restaurant:8082 order:8083 payment:8084 delivery:8085 notification:8086; do
+                            kubectl -n staging exec deploy/frontend -- wget -qO- "http://${svc%%:*}-service:${svc##*:}/health"
+                            echo
+                        done
+                    '''
+                }
             }
         }
 
@@ -136,20 +139,19 @@ pipeline {
 
         stage('Deploy to production') {
             steps {
-                sh '''
-                    echo "[SIMULATION] az aks get-credentials --name aks-fooddelivery-production"
-                    while read -r image; do
-                        svc=$(echo "$image" | cut -d/ -f2 | cut -d: -f1)
-                        echo "[SIMULATION] kubectl -n production set image deployment/$svc $svc=$image"
-                    done < images.txt
-                    echo "Production deployment finished: $IMAGE_TAG"
-                '''
+                withCredentials([file(credentialsId: 'k8s-kubeconfig', variable: 'KUBECONFIG')]) {
+                    sh '''
+                        helm upgrade --install food-delivery helm/food-delivery                             --namespace production                             -f helm/food-delivery/values-production.yaml                             --set image.tag=$IMAGE_TAG                             --wait --timeout 5m
+                        kubectl -n production get pods,svc,hpa,ingress
+                        helm -n production history food-delivery
+                    '''
+                }
             }
         }
     }
 
     post {
-        success { echo 'CI/CD passed: images built, smoke-tested, pushed to the registry and deployed.' }
+        success { echo 'CI/CD passed: images built, pushed and deployed to Kubernetes (staging, production).' }
         aborted { echo 'Pipeline aborted: production deployment was not approved.' }
         failure { echo 'CI/CD failed: check the stage logs above.' }
     }
